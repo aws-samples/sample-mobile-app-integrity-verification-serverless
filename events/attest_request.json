@@ -1,0 +1,49 @@
+{
+  "resource": "/attest",
+  "path": "/attest",
+  "httpMethod": "POST",
+  "headers": {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXItMTIzIiwiaWF0IjoxNjk5MDAwMDAwLCJleHAiOjk5OTk5OTk5OTksInRva2VuX3VzZSI6ImFjY2VzcyIsImNsaWVudF9pZCI6InRlc3QtY2xpZW50LWlkIn0.placeholder_signature"
+  },
+  "multiValueHeaders": {
+    "Content-Type": ["application/json"],
+    "Authorization": ["Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXItMTIzIiwiaWF0IjoxNjk5MDAwMDAwLCJleHAiOjk5OTk5OTk5OTksInRva2VuX3VzZSI6ImFjY2VzcyIsImNsaWVudF9pZCI6InRlc3QtY2xpZW50LWlkIn0.placeholder_signature"]
+  },
+  "queryStringParameters": null,
+  "multiValueQueryStringParameters": null,
+  "pathParameters": null,
+  "stageVariables": null,
+  "requestContext": {
+    "resourceId": "abc123",
+    "resourcePath": "/attest",
+    "httpMethod": "POST",
+    "extendedRequestId": "test-request-id",
+    "requestTime": "01/Nov/2023:00:00:00 +0000",
+    "path": "/dev/attest",
+    "accountId": "123456789012",
+    "protocol": "HTTP/1.1",
+    "stage": "dev",
+    "domainPrefix": "testapi",
+    "requestTimeEpoch": 1698796800000,
+    "requestId": "test-request-id-001",
+    "identity": {
+      "cognitoIdentityPoolId": null,
+      "accountId": null,
+      "cognitoIdentityId": null,
+      "caller": null,
+      "sourceIp": "192.168.1.1",
+      "principalOrgId": null,
+      "accessKey": null,
+      "cognitoAuthenticationType": null,
+      "cognitoAuthenticationProvider": null,
+      "userArn": null,
+      "userAgent": "Mobile-App/1.0",
+      "user": null
+    },
+    "domainName": "testapi.execute-api.us-east-1.amazonaws.com",
+    "apiId": "testapi123"
+  },
+  "body": "{\"integrity_token\": \"demo-integrity-token\", \"platform\": \"android\"}",
+  "isBase64Encoded": false
+}
