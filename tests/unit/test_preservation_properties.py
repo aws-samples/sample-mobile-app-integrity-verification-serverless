@@ -114,7 +114,9 @@ def _is_invalid_json(s: str) -> bool:
 
 def _make_cognito_token(sub: str = "a1b2c3d4-e5f6-7890-abcd-ef1234567890") -> str:
     """Create a minimal JWT with a sub claim (unfixed code decodes without verification)."""
-    return pyjwt.encode({"sub": sub}, "dummy-secret", algorithm="HS256")
+    return pyjwt.encode(  # nosemgrep: python.jwt.security.jwt-python-hardcoded-secret
+        {"sub": sub}, "dummy-secret", algorithm="HS256"
+    )
 
 
 def _make_attest_event(body=None, body_str=None, authorization=None):
@@ -170,7 +172,7 @@ class TestPreservationValidAttestationFlow:
             authorization=f"Bearer {token}",
         )
 
-        signing_secret = "test-preservation-secret-for-hmac"
+        signing_secret = "test-preservation-secret-for-hmac"  # nosec B105 - test fixture
 
         with patch(
             "attestation_exchange.app._get_signing_secret",
@@ -489,7 +491,7 @@ class TestPreservationDemoMode:
         import attestation_exchange.app as app_module
         app_module._signing_secret_cache = None
 
-        signing_secret = "test-demo-mode-secret"
+        signing_secret = "test-demo-mode-secret"  # nosec B105 - test fixture
         token = _make_cognito_token(sub=user_sub)
         event = _make_attest_event(
             body={"integrity_token": integrity_token, "platform": "android"},

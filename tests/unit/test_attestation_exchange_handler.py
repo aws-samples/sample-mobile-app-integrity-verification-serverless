@@ -4,6 +4,7 @@ Validates Requirements: 2.1, 2.2, 2.3, 2.4, 11.3
 """
 
 import json
+import os
 from unittest.mock import patch, MagicMock
 
 import jwt as pyjwt
@@ -13,12 +14,16 @@ from attestation_exchange.app import lambda_handler
 from attestation_exchange.play_integrity import AttestationVerificationError
 
 
-SIGNING_SECRET = "test-signing-secret-key-for-hmac-256-operations"
+SIGNING_SECRET = os.environ.get(  # nosec B105 - test-only secret
+    "TEST_SIGNING_SECRET", "test-signing-secret-key-for-hmac-256-operations"
+)
 
 
 def _make_cognito_token(sub: str = "a1b2c3d4-e5f6-7890-abcd-ef1234567890") -> str:
     """Create a minimal JWT with a sub claim for Authorization header."""
-    return pyjwt.encode({"sub": sub}, "dummy-secret", algorithm="HS256")
+    return pyjwt.encode(  # nosemgrep: python.jwt.security.jwt-python-hardcoded-secret
+        {"sub": sub}, "dummy-secret", algorithm="HS256"
+    )
 
 
 def _mock_cognito_verify(sub: str = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"):
@@ -209,7 +214,9 @@ class TestMissingAuthorization:
     def test_missing_sub_in_token_returns_401(self, mock_get_signing_secret):
         """JWT without a sub claim returns 401."""
         # Create a token with no sub claim
-        token_no_sub = pyjwt.encode({"aud": "test"}, "secret", algorithm="HS256")
+        token_no_sub = pyjwt.encode(  # nosemgrep: python.jwt.security.jwt-python-hardcoded-secret
+            {"aud": "test"}, "secret", algorithm="HS256"
+        )
         event = _make_event(
             body={"integrity_token": "some-token", "platform": "android"},
             authorization=f"Bearer {token_no_sub}",

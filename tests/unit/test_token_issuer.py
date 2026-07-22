@@ -4,13 +4,17 @@ Validates Requirements 11.1, 11.4 - JWT minting correctness, TTL accuracy,
 claim completeness, and signing verification.
 """
 
+import os
+
 import jwt
 import pytest
 
 from attestation_exchange.token_issuer import mint_attestation_jwt
 
 
-SIGNING_SECRET = "test-signing-secret-key-for-unit-tests"
+SIGNING_SECRET = os.environ.get(  # nosec B105 - test-only secret
+    "TEST_SIGNING_SECRET", "test-signing-secret-key-for-unit-tests"
+)
 USER_SUB = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 
 

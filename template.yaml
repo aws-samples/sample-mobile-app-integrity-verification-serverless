@@ -47,11 +47,21 @@ Globals:
 
 Resources:
   # ===== API Gateway =====
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/apigateway/attestation-api-${Environment}"
+      RetentionInDays: 90
+
   AttestationApi:
     Type: AWS::Serverless::Api
     Properties:
       Name: !Sub "attestation-api-${Environment}"
       StageName: !Ref Environment
+      TracingEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}'
       Auth:
         DefaultAuthorizer: AttestationAuthorizer
         Authorizers:
@@ -114,12 +124,35 @@ Resources:
       Domain: !Sub "attestation-${Environment}-${AWS::AccountId}"
       UserPoolId: !Ref CognitoUserPool
 
+  # ===== KMS Resources =====
+  AttestationSigningKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "KMS CMK for encrypting attestation signing secret (${Environment})"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowRootAccountFullAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+
+  AttestationSigningKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/attestation-signing-key-${Environment}"
+      TargetKeyId: !Ref AttestationSigningKey
+
   # ===== Secrets Manager Resources =====
   AttestationSigningSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub "attestation-signing-secret-${Environment}"
       Description: HMAC signing key for attestation JWT minting and verification
+      KmsKeyId: !Ref AttestationSigningKey
       GenerateSecretString:
         PasswordLength: 64
         ExcludePunctuation: true
@@ -150,6 +183,11 @@ Resources:
               Action:
                 - secretsmanager:GetSecretValue
               Resource: !Ref AttestationSigningSecret
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !GetAtt AttestationSigningKey.Arn
       Events:
         PostAttest:
           Type: Api
@@ -180,6 +218,11 @@ Resources:
               Action:
                 - secretsmanager:GetSecretValue
               Resource: !Ref AttestationSigningSecret
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !GetAtt AttestationSigningKey.Arn
 
   SampleApiFunction:
     Type: AWS::Serverless::Function

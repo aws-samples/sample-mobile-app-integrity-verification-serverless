@@ -1,5 +1,6 @@
 """Unit tests for the attestation token verifier module."""
 
+import os
 import time
 
 import jwt
@@ -8,7 +9,9 @@ import pytest
 from attestation_verifier import AuthorizationError, verify_token
 
 
-SIGNING_SECRET = "test-signing-secret-key-for-unit-tests"
+SIGNING_SECRET = os.environ.get(  # nosec B105 - test-only secret
+    "TEST_SIGNING_SECRET", "test-signing-secret-key-for-unit-tests"
+)
 
 
 def _mint_valid_token(
@@ -30,7 +33,9 @@ def _mint_valid_token(
         "app_integrity": app_integrity,
         "platform": "android",
     }
-    return jwt.encode(claims, signing_secret, algorithm="HS256")
+    return jwt.encode(  # nosemgrep: python.jwt.security.jwt-python-hardcoded-secret
+        claims, signing_secret, algorithm="HS256"
+    )
 
 
 class TestVerifyTokenValid:
@@ -53,7 +58,7 @@ class TestVerifyTokenSignature:
     """Tests for signature verification (Requirement 6.1)."""
 
     def test_wrong_secret_raises_error(self):
-        token = _mint_valid_token(signing_secret="correct-secret")
+        token = _mint_valid_token(signing_secret="correct-secret")  # nosec B105
 
         with pytest.raises(AuthorizationError, match="invalid signature"):
             verify_token(token, "wrong-secret")

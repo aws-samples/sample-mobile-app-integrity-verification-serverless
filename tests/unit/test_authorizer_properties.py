@@ -182,7 +182,7 @@ class TestProperty3InvalidCognitoSignature:
         For any REQUEST event where the Cognito token has an invalid signature,
         the Lambda_Authorizer SHALL return a Deny policy with principalId 'unauthorized'.
         """
-        authorizer_app._signing_secret_cache = "test-secret"
+        authorizer_app._signing_secret_cache = "test-secret"  # nosec B105 - test fixture
 
         event = _build_event(
             method_arn=method_arn,
@@ -191,7 +191,7 @@ class TestProperty3InvalidCognitoSignature:
         )
 
         with patch.object(
-            authorizer_app, "_get_signing_secret", return_value="test-secret"
+            authorizer_app, "_get_signing_secret", return_value="test-secret"  # nosec B105
         ), patch(
             "cognito_verifier.verify_token",
             side_effect=CognitoAuthError("Token signature verification failed"),
@@ -218,7 +218,7 @@ class TestProperty3ExpiredCognitoToken:
         For any REQUEST event where the Cognito token is expired,
         the Lambda_Authorizer SHALL return a Deny policy with principalId 'unauthorized'.
         """
-        authorizer_app._signing_secret_cache = "test-secret"
+        authorizer_app._signing_secret_cache = "test-secret"  # nosec B105 - test fixture
 
         event = _build_event(
             method_arn=method_arn,
@@ -227,7 +227,7 @@ class TestProperty3ExpiredCognitoToken:
         )
 
         with patch.object(
-            authorizer_app, "_get_signing_secret", return_value="test-secret"
+            authorizer_app, "_get_signing_secret", return_value="test-secret"  # nosec B105
         ), patch(
             "cognito_verifier.verify_token",
             side_effect=CognitoAuthError("Token has expired"),
@@ -255,7 +255,7 @@ class TestProperty3InvalidAttestationSignature:
         For any REQUEST event where the attestation JWT has an invalid signature,
         the Lambda_Authorizer SHALL return a Deny policy with principalId 'unauthorized'.
         """
-        authorizer_app._signing_secret_cache = "test-secret"
+        authorizer_app._signing_secret_cache = "test-secret"  # nosec B105 - test fixture
 
         event = _build_event(
             method_arn=method_arn,
@@ -264,7 +264,7 @@ class TestProperty3InvalidAttestationSignature:
         )
 
         with patch.object(
-            authorizer_app, "_get_signing_secret", return_value="test-secret"
+            authorizer_app, "_get_signing_secret", return_value="test-secret"  # nosec B105
         ), patch(
             "cognito_verifier.verify_token",
             return_value={"sub": user_sub, "token_use": "access"},
@@ -295,7 +295,7 @@ class TestProperty3ExpiredAttestationToken:
         For any REQUEST event where the attestation JWT is expired,
         the Lambda_Authorizer SHALL return a Deny policy with principalId 'unauthorized'.
         """
-        authorizer_app._signing_secret_cache = "test-secret"
+        authorizer_app._signing_secret_cache = "test-secret"  # nosec B105 - test fixture
 
         event = _build_event(
             method_arn=method_arn,
@@ -304,7 +304,7 @@ class TestProperty3ExpiredAttestationToken:
         )
 
         with patch.object(
-            authorizer_app, "_get_signing_secret", return_value="test-secret"
+            authorizer_app, "_get_signing_secret", return_value="test-secret"  # nosec B105
         ), patch(
             "cognito_verifier.verify_token",
             return_value={"sub": user_sub, "token_use": "access"},
@@ -336,7 +336,7 @@ class TestProperty3CombinedInvalidScenarios:
         For any REQUEST event where either token verification raises an error,
         the Lambda_Authorizer SHALL return a Deny policy with principalId 'unauthorized'.
         """
-        authorizer_app._signing_secret_cache = "test-secret"
+        authorizer_app._signing_secret_cache = "test-secret"  # nosec B105 - test fixture
 
         event = _build_event(
             method_arn=method_arn,
@@ -354,7 +354,7 @@ class TestProperty3CombinedInvalidScenarios:
         cognito_return = {"sub": "test-user", "token_use": "access"}
 
         with patch.object(
-            authorizer_app, "_get_signing_secret", return_value="test-secret"
+            authorizer_app, "_get_signing_secret", return_value="test-secret"  # nosec B105
         ), patch(
             "cognito_verifier.verify_token",
             side_effect=cognito_side_effect if cognito_side_effect else None,
@@ -450,7 +450,7 @@ class TestProperty4AllowWithValidTokens:
         principalId matching the Cognito sub, and context containing user_sub and
         attestation_verified="true".
         """
-        authorizer_app._signing_secret_cache = "test-secret"
+        authorizer_app._signing_secret_cache = "test-secret"  # nosec B105 - test fixture
 
         event = _build_event(
             method_arn=method_arn,
@@ -462,7 +462,7 @@ class TestProperty4AllowWithValidTokens:
         attestation_claims = {"iss": "attestation-exchange", "exp": 9999999999}
 
         with patch.object(
-            authorizer_app, "_get_signing_secret", return_value="test-secret"
+            authorizer_app, "_get_signing_secret", return_value="test-secret"  # nosec B105
         ), patch(
             "cognito_verifier.verify_token",
             return_value=cognito_claims,

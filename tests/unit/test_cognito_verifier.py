@@ -34,7 +34,7 @@ ISSUER_URL = f"https://cognito-idp.{REGION}.amazonaws.com/{USER_POOL_ID}"
 
 def _mint_cognito_token(
     kid="test-kid-001",
-    token_use="access",
+    token_use="access",  # nosec B107 - Cognito token_use claim value, not a password
     client_id=APP_CLIENT_ID,
     iss=ISSUER_URL,
     sub="user-abc-123",
@@ -132,7 +132,7 @@ class TestVerifyTokenUse:
     """Tests for token_use claim validation (Requirement 5.2)."""
 
     def test_wrong_token_use_raises_error(self, mock_jwks_response):
-        token = _mint_cognito_token(token_use="id")
+        token = _mint_cognito_token(token_use="id")  # nosec B106 - token_use claim, not password
 
         with patch("cognito_verifier.requests.get", return_value=mock_jwks_response):
             with pytest.raises(AuthorizationError, match="token_use"):

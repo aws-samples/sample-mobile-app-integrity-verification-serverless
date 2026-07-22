@@ -94,7 +94,7 @@ class TestForgedCognitoJWT:
         monkeypatch.setenv("DEMO_MODE", "true")
 
         # Craft a forged JWT — signed with an arbitrary secret (not the real one)
-        forged_token = pyjwt.encode(
+        forged_token = pyjwt.encode(  # nosemgrep: python.jwt.security.jwt-python-hardcoded-secret
             {"sub": sub_claim, "token_use": "access", "iss": "https://fake.issuer"},
             "attacker-secret-key",
             algorithm="HS256",
@@ -235,7 +235,7 @@ class TestInvalidPlatformAccepted:
         monkeypatch.setenv("DEMO_MODE", "true")
 
         # Use a valid-looking token (doesn't matter since platform should be validated first)
-        token = pyjwt.encode(
+        token = pyjwt.encode(  # nosemgrep: python.jwt.security.jwt-python-hardcoded-secret
             {"sub": "user-123", "token_use": "access"},
             "some-key",
             algorithm="HS256",

@@ -7,6 +7,7 @@ Validates Requirements: 11.3, 11.4
 """
 
 import json
+import os
 from unittest.mock import patch, MagicMock
 
 import jwt as pyjwt
@@ -16,12 +17,16 @@ from attestation_exchange.app import lambda_handler
 from attestation_exchange.play_integrity import AttestationVerificationError
 
 
-SIGNING_SECRET = "test-signing-secret-key-for-hmac-256-operations"
+SIGNING_SECRET = os.environ.get(  # nosec B105 - test-only secret
+    "TEST_SIGNING_SECRET", "test-signing-secret-key-for-hmac-256-operations"
+)
 
 
 def _make_cognito_token(sub: str = "a1b2c3d4-e5f6-7890-abcd-ef1234567890") -> str:
     """Create a minimal JWT with a sub claim for Authorization header."""
-    return pyjwt.encode({"sub": sub}, "dummy-secret", algorithm="HS256")
+    return pyjwt.encode(  # nosemgrep: python.jwt.security.jwt-python-hardcoded-secret
+        {"sub": sub}, "dummy-secret", algorithm="HS256"
+    )
 
 
 def _mock_cognito_verify(sub: str = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"):
@@ -204,7 +209,10 @@ class TestSecretsManagerMocking:
     def test_secrets_manager_extension_called_with_correct_arn(self, monkeypatch):
         """Lambda calls Secrets Manager Extension with the ARN from SIGNING_SECRET_ARN env var."""
         monkeypatch.setenv("DEMO_MODE", "true")
-        secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret-abc123"
+        secret_arn = os.environ.get(  # nosec B105 - test-only ARN
+            "TEST_SECRET_ARN",
+            "arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret-abc123",
+        )
         monkeypatch.setenv("SIGNING_SECRET_ARN", secret_arn)
         monkeypatch.setenv("AWS_SESSION_TOKEN", "test-session-token")
 

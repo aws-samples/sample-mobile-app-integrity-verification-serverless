@@ -124,10 +124,15 @@ try {
 # Step 7: Test security fix - forged JWT rejected
 Write-Host "`n[7/7] Testing security fix: forged JWT rejected..." -ForegroundColor Yellow
 try {
+    # Generate a minimal forged JWT dynamically (header.payload.signature format with invalid signature)
+    $forgedHeader = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"alg":"HS256"}')) -replace '\+','-' -replace '/','_' -replace '='
+    $forgedPayload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"sub":"attacker"}')) -replace '\+','-' -replace '/','_' -replace '='
+    $forgedJwt = "$forgedHeader.$forgedPayload.invalidsignature"
+
     Invoke-RestMethod -Uri "$ApiEndpoint/attest" -Method POST `
         -Headers @{
             "Content-Type" = "application/json"
-            "Authorization" = "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhdHRhY2tlciJ9.fake"
+            "Authorization" = "Bearer $forgedJwt"
         } -Body '{"integrity_token": "test-token-1234567890", "platform": "android"}' -ErrorAction Stop
     Write-Host "  UNEXPECTED: Forged JWT was accepted!" -ForegroundColor Red
 } catch {

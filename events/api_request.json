@@ -3,12 +3,12 @@
   "path": "/protected",
   "httpMethod": "GET",
   "headers": {
-    "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXItMTIzIiwiaWF0IjoxNjk5MDAwMDAwLCJleHAiOjk5OTk5OTk5OTksInRva2VuX3VzZSI6ImFjY2VzcyIsImNsaWVudF9pZCI6InRlc3QtY2xpZW50LWlkIiwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC51cy1lYXN0LTEuYW1hem9uYXdzLmNvbS91cy1lYXN0LTFfVGVzdFBvb2wifQ.placeholder_signature",
-    "X-Attestation-Token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhdHRlc3RhdGlvbi1leGNoYW5nZSIsInN1YiI6InRlc3QtdXNlci0xMjMiLCJpYXQiOjE2OTkwMDAwMDAsImV4cCI6OTk5OTk5OTk5OSwiZGV2aWNlX2ludGVncml0eSI6InZlcmlmaWVkIiwiYXBwX2ludGVncml0eSI6InZlcmlmaWVkIiwicGxhdGZvcm0iOiJhbmRyb2lkIn0.placeholder_signature"
+    "Authorization": "Bearer REPLACE_WITH_VALID_COGNITO_ACCESS_TOKEN",
+    "X-Attestation-Token": "REPLACE_WITH_VALID_ATTESTATION_TOKEN"
   },
   "multiValueHeaders": {
-    "Authorization": ["Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXItMTIzIiwiaWF0IjoxNjk5MDAwMDAwLCJleHAiOjk5OTk5OTk5OTksInRva2VuX3VzZSI6ImFjY2VzcyIsImNsaWVudF9pZCI6InRlc3QtY2xpZW50LWlkIiwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC51cy1lYXN0LTEuYW1hem9uYXdzLmNvbS91cy1lYXN0LTFfVGVzdFBvb2wifQ.placeholder_signature"],
-    "X-Attestation-Token": ["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhdHRlc3RhdGlvbi1leGNoYW5nZSIsInN1YiI6InRlc3QtdXNlci0xMjMiLCJpYXQiOjE2OTkwMDAwMDAsImV4cCI6OTk5OTk5OTk5OSwiZGV2aWNlX2ludGVncml0eSI6InZlcmlmaWVkIiwiYXBwX2ludGVncml0eSI6InZlcmlmaWVkIiwicGxhdGZvcm0iOiJhbmRyb2lkIn0.placeholder_signature"]
+    "Authorization": ["Bearer REPLACE_WITH_VALID_COGNITO_ACCESS_TOKEN"],
+    "X-Attestation-Token": ["REPLACE_WITH_VALID_ATTESTATION_TOKEN"]
   },
   "queryStringParameters": null,
   "multiValueQueryStringParameters": null,

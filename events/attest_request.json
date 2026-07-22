@@ -4,11 +4,11 @@
   "httpMethod": "POST",
   "headers": {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXItMTIzIiwiaWF0IjoxNjk5MDAwMDAwLCJleHAiOjk5OTk5OTk5OTksInRva2VuX3VzZSI6ImFjY2VzcyIsImNsaWVudF9pZCI6InRlc3QtY2xpZW50LWlkIn0.placeholder_signature"
+    "Authorization": "Bearer REPLACE_WITH_VALID_COGNITO_ACCESS_TOKEN"
   },
   "multiValueHeaders": {
     "Content-Type": ["application/json"],
-    "Authorization": ["Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXItMTIzIiwiaWF0IjoxNjk5MDAwMDAwLCJleHAiOjk5OTk5OTk5OTksInRva2VuX3VzZSI6ImFjY2VzcyIsImNsaWVudF9pZCI6InRlc3QtY2xpZW50LWlkIn0.placeholder_signature"]
+    "Authorization": ["Bearer REPLACE_WITH_VALID_COGNITO_ACCESS_TOKEN"]
   },
   "queryStringParameters": null,
   "multiValueQueryStringParameters": null,

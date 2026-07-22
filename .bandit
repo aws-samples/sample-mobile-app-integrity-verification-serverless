@@ -1,0 +1,3 @@
+[bandit]
+# Exclude virtual env and hypothesis data from scans
+exclude_dirs = .venv,.hypothesis,.git

@@ -40,7 +40,7 @@ ISSUER_URL = f"https://cognito-idp.{REGION}.amazonaws.com/{USER_POOL_ID}"
 
 
 def _mint_token(
-    token_use="access",
+    token_use="access",  # nosec B107 - Cognito token_use claim value, not a password
     client_id=APP_CLIENT_ID,
     iss=ISSUER_URL,
     ttl_seconds=3600,
