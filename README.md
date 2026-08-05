@@ -1,31 +1,54 @@
 # Verifying mobile app integrity at the API layer using AWS serverless
 
-This project is a **companion code repository** for the AWS Compute Blog post [Verifying mobile app integrity at the API layer using AWS serverless](https://aws.amazon.com/blogs/compute/verifying-mobile-app-integrity-api-layer-serverless/). It provides a deployable reference implementation of a layered verification system that validates both **user identity** (via Amazon Cognito) and **application integrity** (via attestation JWT) before granting access to protected API endpoints.
+> ⚠️ **This is a demo/reference implementation.** Play Integrity verification is **simulated** — the `verify_token()` function always returns a hardcoded passing verdict without making any network calls to Google. **Do not deploy this as-is in production.** See [Demo vs. Production](#demo-vs-production) for what you need to change.
 
-> **Note:** This is a demonstration repository. The Play Integrity verification is simulated with a hardcoded passing verdict. In a production implementation, you would integrate with the actual [Google Play Integrity API](https://developer.android.com/google/play/integrity) or [Apple App Attest](https://developer.apple.com/documentation/devicecheck/establishing-your-app-s-integrity).
+This project is a **companion code repository** for the AWS Compute Blog post [Verifying mobile app integrity at the API layer using AWS serverless](https://aws.amazon.com/blogs/compute/verifying-mobile-app-integrity-api-layer-serverless/). It provides a deployable reference implementation of a layered verification system that validates both **user identity** (WHO — via Amazon Cognito) and **application integrity** (WHAT — via platform attestation) before granting access to protected API endpoints.
 
 ## Architecture
 
-![Architecture Diagram](images/architecture.png)
+![Architecture Diagram](images/serverless-mobile-api-auth-v2.png)
 
 The architecture consists of the following components:
 
-1. **Amazon Cognito** — User authentication and identity management
-2. **API Gateway (REST)** — API endpoint with a REQUEST-type Lambda authorizer
-3. **Attestation Exchange Lambda** — Verifies Play Integrity tokens and mints short-lived attestation JWTs
-4. **Lambda Authorizer** — Dual-token validation (Cognito + attestation JWT) on protected routes
-5. **Sample API Lambda** — Protected endpoint demonstrating the full attestation flow
-6. **AWS Secrets Manager** — Stores the HMAC signing key for attestation JWT minting/verification
+1. **Amazon Cognito** — User authentication and identity management (WHO)
+2. **Google Play Integrity / Apple App Attest** — Platform attestation proving the app is legitimate and the device is uncompromised (WHAT)
+3. **API Gateway (REST)** — API endpoint with a REQUEST-type Lambda authorizer
+4. **Attestation Exchange Lambda** — Verifies platform attestation tokens and mints short-lived attestation JWTs
+5. **Lambda Authorizer** — Dual-token validation (Cognito + attestation JWT) on protected routes
+6. **Sample API Lambda** — Protected endpoint demonstrating the full attestation flow
+7. **AWS Secrets Manager** — Stores the HMAC signing key for attestation JWT minting/verification
 
 ### Request Flow
 
-1. Mobile app authenticates with Cognito and receives an access token
-2. Mobile app obtains a Play Integrity token from Google Play services
-3. App calls `POST /attest` with the integrity token and Cognito access token
-4. Attestation Exchange Lambda verifies the Play Integrity token and mints a short-lived attestation JWT
-5. App calls `GET /protected` with both the Cognito access token and attestation JWT
-6. Lambda Authorizer validates both tokens and returns an Allow/Deny policy
-7. If allowed, the protected Lambda executes and returns the response
+1. Mobile app authenticates **directly** with Cognito (via SRP auth or hosted UI) and receives an access token
+2. Mobile app obtains a Play Integrity token from Google Play services (or App Attest token from Apple)
+3. App calls `POST /attest` (via API Gateway, authorizer bypassed) with the integrity token in the body and Cognito access token in the `Authorization` header
+4. Attestation Exchange Lambda verifies the Cognito token (via JWKS), then verifies the Play Integrity token. **In this demo, Play Integrity verification is simulated — it always passes.**
+5. If verification passes, the Lambda mints a short-lived attestation JWT (HS256, signed with a Secrets Manager key)
+6. App calls `GET /protected` with both the Cognito access token (`Authorization` header) and attestation JWT (`X-Attestation-Token` header)
+7. Lambda Authorizer validates both tokens and returns an Allow/Deny policy
+8. If allowed, the protected Lambda executes and returns the response
+
+## Demo vs. Production
+
+This repository is a **demo reference implementation**. Here's what's simulated and what's real:
+
+| Component | Demo behavior | Production behavior |
+|-----------|--------------|---------------------|
+| **Cognito authentication** | ✅ Real — actual Cognito User Pool, real token verification via JWKS | Same |
+| **Play Integrity verification** | ⚠️ **Simulated** — `verify_token()` returns a hardcoded passing verdict | Calls `playintegrity.googleapis.com/v1/{project_id}:decodeIntegrityToken` |
+| **Attestation JWT minting** | ✅ Real — HS256 JWT signed with Secrets Manager key | Same |
+| **Lambda Authorizer** | ✅ Real — verifies both Cognito + attestation JWT signatures | Same |
+| **AWS WAF** | ❌ Not included | Add WAF Web ACL with Bot Control and rate limiting |
+| **Apple App Attest (iOS)** | ❌ Not implemented (platform field accepted but not verified) | Implement Apple DeviceCheck verification |
+
+### What you'd change for production
+
+1. **Replace `play_integrity.py` `verify_token()`** — Implement the real Google Play Integrity API call using the `requests` library to call `https://playintegrity.googleapis.com/v1/{project_id}:decodeIntegrityToken`. The `evaluate_verdict()` function already contains correct validation logic for checking Google's response.
+2. **Configure Google Cloud credentials** — Set up a service account or use application default credentials for the Google API call.
+3. **Add Apple App Attest** — For iOS support, implement a similar verification path using Apple's DeviceCheck framework.
+4. **Add AWS WAF** — Attach a WAF Web ACL with Bot Control (Targeted) and rate limiting rules to the API Gateway stage for an additional defense layer.
+5. **Remove `DEMO_MODE` env var** — Or implement conditional logic that uses it to switch between real and simulated verification.
 
 ## Prerequisites
 
@@ -38,7 +61,11 @@ The architecture consists of the following components:
 
 ```
 ├── src/
-│   ├── attestation_exchange/   # POST /attest — verifies integrity token, mints attestation JWT
+│   ├── attestation_exchange/   # POST /attest — verifies integrity token (simulated), mints attestation JWT
+│   │   ├── app.py             # Lambda handler — orchestrates verification + JWT minting
+│   │   ├── play_integrity.py  # ⚠️ DEMO: always returns passing verdict (replace for production)
+│   │   ├── cognito_verifier.py # Verifies Cognito access tokens via JWKS
+│   │   └── token_issuer.py    # Mints HS256-signed attestation JWTs
 │   ├── authorizer/             # Lambda Authorizer — dual-token validation (Cognito + attestation)
 │   └── sample_api/             # GET /protected — demo endpoint behind the authorizer
 ├── tests/
@@ -184,6 +211,8 @@ curl -s -X POST "${API_ENDPOINT}/attest" \
   -d '{"integrity_token": "demo-token", "platform": "android"}' | jq .
 ```
 
+> **Note:** In this demo, `integrity_token` can be any non-empty string — it's not actually verified against Google. In production, this would be a real Play Integrity token obtained from the device.
+
 Expected response:
 
 ```json
@@ -260,6 +289,9 @@ The SAM template exposes the following parameters:
 |-----------|------|---------|-------------|
 | `Environment` | String | `dev` | Deployment environment name (`dev`, `staging`, `prod`) |
 | `AttestationTokenTTLMinutes` | Number | `10` | Time-to-live for minted attestation JWTs (5–15 minutes) |
+| `AppPackageName` | String | `com.example.app` | Expected Android app package name for Play Integrity verification |
+| `GooglePlayIntegrityProjectId` | String | `demo-project` | Google Cloud project ID (unused in demo mode) |
+| `CognitoCallbackUrl` | String | `http://localhost:3000/callback` | OAuth callback URL for Cognito hosted UI |
 
 ### Environment Variables
 
@@ -267,57 +299,48 @@ The SAM template exposes the following parameters:
 |----------|----------|-------------|
 | `SIGNING_SECRET_ARN` | Attestation Exchange, Authorizer | ARN of the Secrets Manager secret containing the HMAC signing key |
 | `TOKEN_TTL_MINUTES` | Attestation Exchange | Attestation JWT lifetime in minutes |
-| `DEMO_MODE` | Attestation Exchange | Always `"true"` in this demo (simulates Play Integrity verification) |
-| `COGNITO_USER_POOL_ID` | Authorizer | Cognito User Pool ID for token verification |
-| `COGNITO_APP_CLIENT_ID` | Authorizer | Cognito App Client ID for audience validation |
-| `COGNITO_REGION` | Authorizer | AWS Region where the Cognito User Pool is deployed |
+| `DEMO_MODE` | Attestation Exchange | Always `"true"` in this demo — indicates Play Integrity verification is simulated |
+| `COGNITO_USER_POOL_ID` | Attestation Exchange, Authorizer | Cognito User Pool ID for token verification |
+| `COGNITO_APP_CLIENT_ID` | Attestation Exchange, Authorizer | Cognito App Client ID for audience validation |
+| `COGNITO_REGION` | Attestation Exchange, Authorizer | AWS Region where the Cognito User Pool is deployed |
+| `EXPECTED_PACKAGE_NAME` | Attestation Exchange | Expected Android package name (validated in production) |
+| `GOOGLE_PROJECT_ID` | Attestation Exchange | Google Cloud project ID (unused in demo) |
 
 ## How It Works
 
-The system implements a **two-phase verification** pattern:
+The system implements a **two-phase verification** pattern — verifying WHO (user identity) and WHAT (app/device integrity):
 
-### Phase 1: Attestation Exchange
+### Phase 1: Attestation Exchange (`POST /attest`)
 
 The mobile app exchanges a platform attestation token for a short-lived attestation JWT:
 
-1. The app calls `POST /attest` with the Google Play Integrity token and Cognito access token
-2. The Attestation Exchange Lambda verifies the Play Integrity token against the Google API
-3. If the device and app integrity verdicts pass, the Lambda mints an HS256-signed attestation JWT
-4. The JWT contains claims for `device_integrity`, `app_integrity`, `platform`, and standard claims (`iss`, `sub`, `iat`, `exp`)
-5. The attestation JWT is returned to the app with a configurable short TTL (5–15 minutes)
+1. The app calls `POST /attest` with the Play Integrity token in the body and Cognito access token in the `Authorization: Bearer` header
+2. The Attestation Exchange Lambda verifies the Cognito token via JWKS (real verification against Cognito's public keys)
+3. The Lambda verifies the Play Integrity token — **in this demo, this step is simulated and always passes**. In production, it would call the Google Play Integrity API and run `evaluate_verdict()` to check app recognition and device integrity thresholds.
+4. If verification passes, the Lambda retrieves the HMAC signing key from Secrets Manager and mints an HS256-signed attestation JWT
+5. The JWT contains claims for `device_integrity`, `app_integrity`, `platform`, user `sub`, and standard claims (`iss`, `iat`, `exp`)
+6. The attestation JWT is returned to the app with a configurable short TTL (5–15 minutes)
 
-### Phase 2: Protected API Access
+> **Important:** The `/attest` endpoint has its Lambda authorizer **disabled** in API Gateway (`Auth: Authorizer: NONE`) because the app doesn't yet have an attestation token — that's what this endpoint issues. Cognito verification is done inside the Lambda code instead.
+
+### Phase 2: Protected API Access (`GET /protected`)
 
 The app accesses protected endpoints using both tokens:
 
-1. The app calls protected endpoints (e.g., `GET /protected`) with both the Cognito access token (`Authorization` header) and attestation JWT (`X-Attestation-Token` header)
+1. The app calls protected endpoints with both the Cognito access token (`Authorization` header) and attestation JWT (`X-Attestation-Token` header)
 2. The REQUEST-type Lambda Authorizer validates:
    - Cognito access token signature (RS256 against JWKS), expiry, audience, and issuer
-   - Attestation JWT signature (HS256 with shared secret), expiry, issuer, and integrity claims
+   - Attestation JWT signature (HS256 with shared secret from Secrets Manager), expiry, issuer, and integrity claims
 3. If both tokens are valid, an Allow policy is returned with the user's identity in context
 4. The protected Lambda receives the request with enriched authorizer context
-
-## Demo vs. Production
-
-This repository is a **demo reference implementation**. The Play Integrity verification step is simulated — it always returns a passing verdict without making network calls.
-
-To adapt this for production, you would:
-
-1. **Replace `play_integrity.py`** — Implement the real Google Play Integrity API call in `verify_token()` using the `requests` library to call `https://playintegrity.googleapis.com/v1/{project_id}:decodeIntegrityToken`
-2. **Add a `GooglePlayIntegrityProjectId` parameter** to the SAM template and pass it as an environment variable
-3. **Configure Google Cloud credentials** — Set up a service account or use application default credentials for the Google API call
-4. **Remove the `DEMO_MODE` environment variable** — Or set it to `"false"` and implement the conditional logic
-5. **Add Apple App Attest** — For iOS support, implement a similar verification path using Apple's DeviceCheck framework
-6. **Add AWS WAF** — Attach a WAF Web ACL with Bot Control (Targeted) and rate limiting rules to the API Gateway stage
-
-The `evaluate_verdict()` function in `play_integrity.py` already contains the correct validation logic for checking Google's response verdicts.
 
 ## Security Considerations
 
 - **Least privilege IAM policies** — Each Lambda function has IAM policies scoped to only the specific Secrets Manager secret ARN it needs
 - **Short-lived tokens** — Attestation JWTs have a configurable TTL of 5–15 minutes, limiting the window for token reuse
-- **Dual-token validation** — Protected endpoints require both identity (Cognito) and integrity (attestation) verification
-- **Secret rotation** — The HMAC signing key is stored in Secrets Manager and can be rotated without redeploying functions
+- **Dual-token validation** — Protected endpoints require both identity (WHO) and integrity (WHAT) verification
+- **KMS encryption** — The HMAC signing key in Secrets Manager is encrypted with a dedicated KMS CMK with automatic key rotation
+- **Secret rotation** — The signing key is stored in Secrets Manager and can be rotated without redeploying functions
 - **No secrets in code** — All sensitive configuration is managed through environment variables and Secrets Manager
 - **X-Ray tracing** — Active tracing enabled on all Lambda functions for observability
 
@@ -335,6 +358,7 @@ This will delete the CloudFormation stack and all associated resources including
 
 - [AWS Compute Blog: Verifying mobile app integrity at the API layer using AWS serverless](https://aws.amazon.com/blogs/compute/)
 - [Google Play Integrity API documentation](https://developer.android.com/google/play/integrity)
+- [Apple App Attest documentation](https://developer.apple.com/documentation/devicecheck/establishing-your-app-s-integrity)
 - [Amazon Cognito Developer Guide](https://docs.aws.amazon.com/cognito/latest/developerguide/)
 - [AWS SAM Developer Guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/)
 - [Lambda Authorizer documentation](https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-use-lambda-authorizer.html)
