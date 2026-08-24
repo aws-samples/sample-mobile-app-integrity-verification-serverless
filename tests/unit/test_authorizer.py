@@ -248,25 +248,96 @@ class TestAuthorizerInvalidSignatureAttestation:
         assert result["principalId"] == "unauthorized"
 
 
-class TestAuthorizerSecretsManagerMocked:
-    """Test that Secrets Manager Lambda Extension is properly called."""
+class TestAuthorizerCrossIdentityTokenTransfer:
+    """Test that an attestation token bound to one user cannot be used by another.
 
-    @patch("urllib.request.urlopen")
+    Uses the real attestation_verifier (not mocked) to prove the end-to-end
+    authorizer decision: a mismatch between the Cognito 'sub' and the
+    attestation token 'sub' must result in Deny.
+    """
+
+    @patch.object(authorizer_app, "_get_signing_secret", return_value="test-secret")
+    @patch("cognito_verifier.verify_token")
+    def test_mismatched_attestation_sub_is_denied(self, mock_cognito, mock_secret):
+        """USER-B's Cognito token + USER-A's attestation JWT → Deny."""
+        import time as _time
+
+        import jwt as _jwt
+
+        # Caller authenticates as USER-B via Cognito.
+        mock_cognito.return_value = {"sub": "USER-B-sub"}
+
+        # Attestation JWT was minted for USER-A and is otherwise fully valid.
+        iat = int(_time.time())
+        attest_claims = {
+            "iss": "attestation-exchange",
+            "sub": "USER-A-sub",
+            "iat": iat,
+            "exp": iat + 600,
+            "device_integrity": "verified",
+            "app_integrity": "verified",
+            "platform": "android",
+        }
+        attest_token = _jwt.encode(attest_claims, "test-secret", algorithm="HS256")
+
+        event = _make_event(
+            auth_header="Bearer valid-cognito-token-for-user-b",
+            attestation_header=attest_token,
+        )
+        result = authorizer_app.lambda_handler(event, None)
+
+        assert _is_deny(result)
+        assert result["principalId"] == "unauthorized"
+
+    @patch.object(authorizer_app, "_get_signing_secret", return_value="test-secret")
+    @patch("cognito_verifier.verify_token")
+    def test_matching_attestation_sub_is_allowed(self, mock_cognito, mock_secret):
+        """Same 'sub' in both tokens → Allow (guards against over-blocking)."""
+        import time as _time
+
+        import jwt as _jwt
+
+        mock_cognito.return_value = {"sub": "USER-A-sub"}
+
+        iat = int(_time.time())
+        attest_claims = {
+            "iss": "attestation-exchange",
+            "sub": "USER-A-sub",
+            "iat": iat,
+            "exp": iat + 600,
+            "device_integrity": "verified",
+            "app_integrity": "verified",
+            "platform": "android",
+        }
+        attest_token = _jwt.encode(attest_claims, "test-secret", algorithm="HS256")
+
+        event = _make_event(
+            auth_header="Bearer valid-cognito-token-for-user-a",
+            attestation_header=attest_token,
+        )
+        result = authorizer_app.lambda_handler(event, None)
+
+        assert _is_allow(result)
+        assert result["principalId"] == "USER-A-sub"
+        assert result["context"]["user_sub"] == "USER-A-sub"
+
+
+class TestAuthorizerSecretsManagerMocked:
+    """Test that the signing secret is fetched from Secrets Manager via boto3."""
+
+    @patch("boto3.client")
     @patch("cognito_verifier.verify_token")
     @patch("attestation_verifier.verify_token")
-    def test_lambda_extension_called_when_cache_empty(
-        self, mock_attest, mock_cognito, mock_urlopen
+    def test_secrets_manager_called_when_cache_empty(
+        self, mock_attest, mock_cognito, mock_boto_client
     ):
-        """When cache is empty, _get_signing_secret calls Lambda Extension endpoint."""
+        """When cache is empty, _get_signing_secret calls Secrets Manager get_secret_value."""
         # Reset the module-level cache to force a fresh call
         authorizer_app._signing_secret_cache = None
 
-        import json
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"SecretString": "fetched-secret"}).encode()
-        mock_response.__enter__ = lambda s: s
-        mock_response.__exit__ = MagicMock(return_value=False)
-        mock_urlopen.return_value = mock_response
+        mock_sm = MagicMock()
+        mock_sm.get_secret_value.return_value = {"SecretString": "fetched-secret"}
+        mock_boto_client.return_value = mock_sm
 
         mock_cognito.return_value = {"sub": "user-sm-test"}
         mock_attest.return_value = {}
@@ -278,10 +349,8 @@ class TestAuthorizerSecretsManagerMocked:
         result = authorizer_app.lambda_handler(event, None)
 
         assert _is_allow(result)
-        mock_urlopen.assert_called_once()
-        # Verify it called the Lambda Extension endpoint
-        call_args = mock_urlopen.call_args[0][0]
-        assert "localhost:2773/secretsmanager/get" in call_args.full_url
+        mock_boto_client.assert_called_once_with("secretsmanager")
+        mock_sm.get_secret_value.assert_called_once()
 
         # Clean up cache so other tests aren't affected
         authorizer_app._signing_secret_cache = None

@@ -108,11 +108,13 @@ def lambda_handler(event: dict, context) -> dict:
         )
         logger.info("Cognito token valid")
 
-        # Verify attestation JWT
+        # Verify attestation JWT and bind it to the authenticated Cognito
+        # identity so an attestation token cannot be reused across users.
         logger.info("Verifying attestation token")
         attestation_verifier.verify_token(
             token=attestation_token,
             signing_secret=signing_secret,
+            expected_sub=cognito_claims["sub"],
         )
         logger.info("Attestation token valid")
 

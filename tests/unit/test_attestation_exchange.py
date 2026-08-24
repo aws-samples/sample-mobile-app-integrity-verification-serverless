@@ -206,15 +206,19 @@ class TestMissingIntegrityToken:
 class TestSecretsManagerMocking:
     """Test that Secrets Manager is properly called for signing secret (Requirement 11.4)."""
 
-    def test_secrets_manager_extension_called_with_correct_arn(self, monkeypatch):
-        """Lambda calls Secrets Manager Extension with the ARN from SIGNING_SECRET_ARN env var."""
+    def test_secrets_manager_called_with_correct_arn(self, monkeypatch):
+        """Lambda calls Secrets Manager get_secret_value with the ARN from SIGNING_SECRET_ARN env var."""
+        import attestation_exchange.app as app_module
+
         monkeypatch.setenv("DEMO_MODE", "true")
         secret_arn = os.environ.get(  # nosec B105 - test-only ARN
             "TEST_SECRET_ARN",
             "arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret-abc123",
         )
         monkeypatch.setenv("SIGNING_SECRET_ARN", secret_arn)
-        monkeypatch.setenv("AWS_SESSION_TOKEN", "test-session-token")
+
+        # Reset the module-level cache to force a fresh Secrets Manager call
+        app_module._signing_secret_cache = None
 
         token = _make_cognito_token()
         event = _make_event(
@@ -222,20 +226,20 @@ class TestSecretsManagerMocking:
             authorization=f"Bearer {token}",
         )
 
-        # Mock urllib.request.urlopen to simulate the Lambda Extension response
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"SecretString": SIGNING_SECRET}).encode()
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=False)
+        # Mock the boto3 Secrets Manager client
+        mock_sm = MagicMock()
+        mock_sm.get_secret_value.return_value = {"SecretString": SIGNING_SECRET}
 
-        with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen, _mock_cognito_verify():
+        with patch("boto3.client", return_value=mock_sm) as mock_boto_client, _mock_cognito_verify():
             response = lambda_handler(event, None)
 
         assert response["statusCode"] == 200
-        # Verify the Extension endpoint was called with the encoded ARN
-        call_args = mock_urlopen.call_args[0][0]
-        assert "localhost:2773/secretsmanager/get" in call_args.full_url
-        assert "test-secret-abc123" in call_args.full_url
+        mock_boto_client.assert_called_once_with("secretsmanager")
+        # Verify get_secret_value was called with the configured ARN
+        mock_sm.get_secret_value.assert_called_once_with(SecretId=secret_arn)
+
+        # Clean up cache so other tests aren't affected
+        app_module._signing_secret_cache = None
 
     def test_secrets_manager_failure_returns_500(self, monkeypatch):
         """When Secrets Manager raises an exception, handler returns 500."""

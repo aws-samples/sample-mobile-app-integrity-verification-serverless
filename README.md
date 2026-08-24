@@ -126,7 +126,7 @@ pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
 
-All 116 tests should pass, covering property-based tests (Hypothesis) and standard unit tests.
+All 142 tests should pass, covering property-based tests (Hypothesis) and standard unit tests.
 
 ### Local Testing with SAM CLI
 
@@ -329,13 +329,15 @@ The app accesses protected endpoints using both tokens:
 2. The REQUEST-type Lambda Authorizer validates:
    - Cognito access token signature (RS256 against JWKS), expiry, audience, and issuer
    - Attestation JWT signature (HS256 with shared secret from Secrets Manager), expiry, issuer, and integrity claims
+   - That the attestation JWT's `sub` claim matches the authenticated Cognito `sub`, binding the attestation to the caller's identity
 3. If both tokens are valid, an Allow policy is returned with the user's identity in context
 4. The protected Lambda receives the request with enriched authorizer context
 
 ## Security Considerations
 
 - **Least privilege IAM policies** — Each Lambda function has IAM policies scoped to only the specific Secrets Manager secret ARN it needs
-- **Short-lived tokens** — Attestation JWTs have a configurable TTL of 5–15 minutes, limiting the window for token reuse
+- **Short-lived tokens** — Attestation JWTs have a configurable TTL of 5–15 minutes, limiting the *time window* for token reuse
+- **Identity-bound attestation** — The attestation JWT carries the caller's Cognito `sub`, and the Lambda Authorizer rejects any request where the attestation token's `sub` does not match the authenticated Cognito identity. This prevents a valid attestation token from being transferred to or replayed by a different user within its TTL
 - **Dual-token validation** — Protected endpoints require both identity (WHO) and integrity (WHAT) verification
 - **KMS encryption** — The HMAC signing key in Secrets Manager is encrypted with a dedicated KMS CMK with automatic key rotation
 - **Secret rotation** — The signing key is stored in Secrets Manager and can be rotated without redeploying functions

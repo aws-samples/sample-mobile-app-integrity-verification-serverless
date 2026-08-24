@@ -74,7 +74,7 @@ class TestProperty6WrongSecret:
         token = jwt.encode(claims, correct_secret, algorithm="HS256")
 
         with pytest.raises(AuthorizationError):
-            verify_token(token, wrong_secret)
+            verify_token(token, wrong_secret, expected_sub="test-user")
 
 
 class TestProperty6WrongIssuer:
@@ -97,7 +97,7 @@ class TestProperty6WrongIssuer:
         token = jwt.encode(claims, secret, algorithm="HS256")
 
         with pytest.raises(AuthorizationError):
-            verify_token(token, secret)
+            verify_token(token, secret, expected_sub="test-user")
 
 
 class TestProperty6ExpiredToken:
@@ -118,7 +118,7 @@ class TestProperty6ExpiredToken:
         token = jwt.encode(claims, secret, algorithm="HS256")
 
         with pytest.raises(AuthorizationError):
-            verify_token(token, secret)
+            verify_token(token, secret, expected_sub="test-user")
 
 
 class TestProperty6InvalidIntegrityClaims:
@@ -143,7 +143,7 @@ class TestProperty6InvalidIntegrityClaims:
         token = jwt.encode(claims, secret, algorithm="HS256")
 
         with pytest.raises(AuthorizationError):
-            verify_token(token, secret)
+            verify_token(token, secret, expected_sub="test-user")
 
     @given(
         bad_app_integrity=st.text(min_size=0, max_size=30).filter(
@@ -162,4 +162,42 @@ class TestProperty6InvalidIntegrityClaims:
         token = jwt.encode(claims, secret, algorithm="HS256")
 
         with pytest.raises(AuthorizationError):
-            verify_token(token, secret)
+            verify_token(token, secret, expected_sub="test-user")
+
+
+class TestPropertySubjectBinding:
+    """Attestation tokens must be bound to the caller's Cognito identity.
+
+    For any token whose 'sub' differs from the expected Cognito 'sub',
+    verify_token SHALL raise an AuthorizationError, regardless of the token
+    otherwise being valid.
+    """
+
+    @given(
+        token_sub=non_empty_text,
+        expected_sub=non_empty_text,
+        secret=signing_secrets,
+    )
+    @settings(max_examples=50)
+    def test_mismatched_subject_always_rejected(self, token_sub, expected_sub, secret):
+        """A valid token whose sub != expected_sub is always denied."""
+        assume(token_sub != expected_sub)
+
+        claims = _mint_valid_claims(sub=token_sub)
+        token = jwt.encode(claims, secret, algorithm="HS256")
+
+        with pytest.raises(AuthorizationError):
+            verify_token(token, secret, expected_sub=expected_sub)
+
+    @given(
+        sub=non_empty_text,
+        secret=signing_secrets,
+    )
+    @settings(max_examples=50)
+    def test_matching_subject_accepted(self, sub, secret):
+        """A valid token whose sub == expected_sub is accepted."""
+        claims = _mint_valid_claims(sub=sub)
+        token = jwt.encode(claims, secret, algorithm="HS256")
+
+        decoded = verify_token(token, secret, expected_sub=sub)
+        assert decoded["sub"] == sub

@@ -43,7 +43,7 @@ class TestVerifyTokenValid:
 
     def test_valid_token_returns_claims(self):
         token = _mint_valid_token()
-        claims = verify_token(token, SIGNING_SECRET)
+        claims = verify_token(token, SIGNING_SECRET, expected_sub="user-123")
 
         assert claims["iss"] == "attestation-exchange"
         assert claims["sub"] == "user-123"
@@ -61,11 +61,11 @@ class TestVerifyTokenSignature:
         token = _mint_valid_token(signing_secret="correct-secret")  # nosec B105
 
         with pytest.raises(AuthorizationError, match="invalid signature"):
-            verify_token(token, "wrong-secret")
+            verify_token(token, "wrong-secret", expected_sub="user-123")
 
     def test_malformed_token_raises_error(self):
         with pytest.raises(AuthorizationError):
-            verify_token("not-a-jwt-token", SIGNING_SECRET)
+            verify_token("not-a-jwt-token", SIGNING_SECRET, expected_sub="user-123")
 
 
 class TestVerifyTokenIssuer:
@@ -75,7 +75,7 @@ class TestVerifyTokenIssuer:
         token = _mint_valid_token(iss="wrong-issuer")
 
         with pytest.raises(AuthorizationError, match="Invalid issuer"):
-            verify_token(token, SIGNING_SECRET)
+            verify_token(token, SIGNING_SECRET, expected_sub="user-123")
 
     def test_missing_issuer_raises_error(self):
         iat = int(time.time())
@@ -89,7 +89,7 @@ class TestVerifyTokenIssuer:
         token = jwt.encode(claims, SIGNING_SECRET, algorithm="HS256")
 
         with pytest.raises(AuthorizationError):
-            verify_token(token, SIGNING_SECRET)
+            verify_token(token, SIGNING_SECRET, expected_sub="user-123")
 
 
 class TestVerifyTokenExpiry:
@@ -99,7 +99,7 @@ class TestVerifyTokenExpiry:
         token = _mint_valid_token(ttl_seconds=-60)
 
         with pytest.raises(AuthorizationError, match="expired"):
-            verify_token(token, SIGNING_SECRET)
+            verify_token(token, SIGNING_SECRET, expected_sub="user-123")
 
 
 class TestVerifyTokenIntegrityClaims:
@@ -109,13 +109,13 @@ class TestVerifyTokenIntegrityClaims:
         token = _mint_valid_token(device_integrity="unverified")
 
         with pytest.raises(AuthorizationError, match="device_integrity"):
-            verify_token(token, SIGNING_SECRET)
+            verify_token(token, SIGNING_SECRET, expected_sub="user-123")
 
     def test_invalid_app_integrity_raises_error(self):
         token = _mint_valid_token(app_integrity="unverified")
 
         with pytest.raises(AuthorizationError, match="app_integrity"):
-            verify_token(token, SIGNING_SECRET)
+            verify_token(token, SIGNING_SECRET, expected_sub="user-123")
 
     def test_missing_device_integrity_raises_error(self):
         iat = int(time.time())
@@ -129,7 +129,7 @@ class TestVerifyTokenIntegrityClaims:
         token = jwt.encode(claims, SIGNING_SECRET, algorithm="HS256")
 
         with pytest.raises(AuthorizationError, match="device_integrity"):
-            verify_token(token, SIGNING_SECRET)
+            verify_token(token, SIGNING_SECRET, expected_sub="user-123")
 
     def test_missing_app_integrity_raises_error(self):
         iat = int(time.time())
@@ -143,4 +143,40 @@ class TestVerifyTokenIntegrityClaims:
         token = jwt.encode(claims, SIGNING_SECRET, algorithm="HS256")
 
         with pytest.raises(AuthorizationError, match="app_integrity"):
-            verify_token(token, SIGNING_SECRET)
+            verify_token(token, SIGNING_SECRET, expected_sub="user-123")
+
+
+class TestVerifyTokenSubjectBinding:
+    """Tests for subject-binding validation.
+
+    An attestation JWT must be bound to the authenticated Cognito identity.
+    A token whose 'sub' does not match the caller's Cognito 'sub' must be
+    rejected, otherwise an attestation token is transferable between users.
+    """
+
+    def test_matching_subject_succeeds(self):
+        token = _mint_valid_token(sub="USER-A-sub")
+        claims = verify_token(token, SIGNING_SECRET, expected_sub="USER-A-sub")
+
+        assert claims["sub"] == "USER-A-sub"
+
+    def test_mismatched_subject_is_denied(self):
+        # Attestation JWT minted for USER-A, presented with USER-B's Cognito token.
+        token = _mint_valid_token(sub="USER-A-sub")
+
+        with pytest.raises(AuthorizationError, match="subject does not match"):
+            verify_token(token, SIGNING_SECRET, expected_sub="USER-B-sub")
+
+    def test_missing_subject_raises_error(self):
+        iat = int(time.time())
+        claims = {
+            "iss": "attestation-exchange",
+            "iat": iat,
+            "exp": iat + 600,
+            "device_integrity": "verified",
+            "app_integrity": "verified",
+        }
+        token = jwt.encode(claims, SIGNING_SECRET, algorithm="HS256")
+
+        with pytest.raises(AuthorizationError):
+            verify_token(token, SIGNING_SECRET, expected_sub="user-123")
