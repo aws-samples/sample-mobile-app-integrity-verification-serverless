@@ -6,7 +6,7 @@ This project is a **companion code repository** for the AWS Compute Blog post [V
 
 ## Architecture
 
-![Architecture Diagram](images/ServerlessMobileAPIAuthv6.png)
+![Architecture Diagram](images/ServerlessMobileAPIAuthv8.png)
 
 The architecture consists of the following components:
 
@@ -15,17 +15,20 @@ The architecture consists of the following components:
 3. **API Gateway (REST)** — API endpoint with a REQUEST-type Lambda authorizer
 4. **Attestation Exchange Lambda** — Verifies platform attestation tokens and mints short-lived attestation JWTs
 5. **Lambda Authorizer** — Dual-token validation (Cognito + attestation JWT) on protected routes
-6. **Sample API Lambda** — Protected endpoint demonstrating the full attestation flow
+6. **Backend Resources (Sample API Lambda)** — Protected backend the authorized request is forwarded to; the Sample API Lambda demonstrates the full attestation flow
 7. **AWS Secrets Manager** — Stores the HMAC signing key for attestation JWT minting/verification
 
 ### Request Flow
 
 1. **Request platform attestation** — The mobile app requests an integrity verdict from the platform vendor.
 2. **Authenticate user** — The app authenticates the user through Amazon Cognito, returning short-lived OAuth tokens.
-3. **Exchange attestation for JWT** — The app sends the platform attestation token to the `/attest` endpoint on Amazon API Gateway, routing the request directly to the Attestation Exchange Lambda.
+3. **Exchange attestation result for token** — The app sends the platform attestation token to the `/attest` endpoint on Amazon API Gateway, routing the request directly to the Attestation Exchange Lambda.
 4. **Retrieve signing key** — The Attestation Exchange Lambda retrieves a signing key from AWS Secrets Manager. The Lambda mints a short-lived attestation JWT and uses the key to sign the token before returning the JWT to the app.
 5. **Validate WAF token** — On each API request, the mobile app includes a cryptographic cookie acquired by the AWS WAF Mobile SDK. The request passes through AWS WAF, which validates the token at the network edge before forwarding to Amazon API Gateway. Requests without a valid SDK token are blocked and never reach the gateway.
-6. **Authorize WHO + WHAT** — Amazon API Gateway invokes the Lambda Authorizer, which evaluates both the Cognito access token and the attestation JWT. It verifies the Cognito token against JWKS and verifies the attestation JWT signature using the same Secrets Manager signing key. If either is missing, expired, or invalid, the authorizer returns a Deny policy and the client receives a 403 response.
+6. **Authorize WHO + WHAT** — Amazon API Gateway invokes the Lambda Authorizer, which evaluates both the Cognito access token and the attestation JWT. It verifies the Cognito token against JWKS, verifies the attestation JWT signature using the same Secrets Manager signing key, and confirms the attestation JWT's `sub` matches the authenticated Cognito identity. If any check is missing, expired, mismatched, or invalid, the authorizer returns a Deny policy and the client receives a 403 response.
+7. **Authorized requests sent to backend** — When the authorizer returns an Allow policy, Amazon API Gateway forwards the request to the backend resources (the Sample API Lambda in this demo), passing the authenticated user identity and attestation status in the authorizer context.
+
+> **Note:** The architecture diagram shows **AWS WAF** (step 5) as part of the recommended production design. WAF is **not deployed** by this repository's SAM template — it's a production hardening step described under [Demo vs. Production](#demo-vs-production).
 
 ## Demo vs. Production
 
