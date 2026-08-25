@@ -1,0 +1,20 @@
+# SAM deployment configuration
+# Copy this file to samconfig.toml and update with your values:
+#   cp samconfig.toml.example samconfig.toml
+#
+# More information about the format:
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-config.html
+
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "serverless-mobile-api-attestation"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+resolve_s3 = true
+s3_prefix = "serverless-mobile-api-attestation"
+parameter_overrides = "Environment=\"dev\" AttestationTokenTTLMinutes=\"10\" AppPackageName=\"com.example.app\" CognitoCallbackUrl=\"http://localhost:3000/callback\" GooglePlayIntegrityProjectId=\"demo-project\""
+image_repositories = []
+
+[default.global.parameters]
+region = "us-east-1"

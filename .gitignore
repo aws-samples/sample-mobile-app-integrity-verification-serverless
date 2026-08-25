@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# AWS SAM
+.aws-sam/
+
+# SAM deploy config (ship .example only)
+samconfig.toml
+
+# Environment / secrets
+.env
+.env.*
+
+# Kiro (local AI agent config/specs)
+.kiro/
+
+# Hypothesis (property-based test database)
+.hypothesis/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage / test artifacts
+.coverage
+htmlcov/
+.pytest_cache/

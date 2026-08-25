@@ -1,0 +1,2 @@
+# Sample API Lambda uses only stdlib and boto3 from Lambda runtime.
+# No additional dependencies required.

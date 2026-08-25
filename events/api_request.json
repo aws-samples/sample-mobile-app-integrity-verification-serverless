@@ -1,0 +1,53 @@
+{
+  "resource": "/protected",
+  "path": "/protected",
+  "httpMethod": "GET",
+  "headers": {
+    "Authorization": "Bearer REPLACE_WITH_VALID_COGNITO_ACCESS_TOKEN",
+    "X-Attestation-Token": "REPLACE_WITH_VALID_ATTESTATION_TOKEN"
+  },
+  "multiValueHeaders": {
+    "Authorization": ["Bearer REPLACE_WITH_VALID_COGNITO_ACCESS_TOKEN"],
+    "X-Attestation-Token": ["REPLACE_WITH_VALID_ATTESTATION_TOKEN"]
+  },
+  "queryStringParameters": null,
+  "multiValueQueryStringParameters": null,
+  "pathParameters": null,
+  "stageVariables": null,
+  "requestContext": {
+    "resourceId": "def456",
+    "resourcePath": "/protected",
+    "httpMethod": "GET",
+    "extendedRequestId": "test-request-id",
+    "requestTime": "01/Nov/2023:00:00:00 +0000",
+    "path": "/dev/protected",
+    "accountId": "123456789012",
+    "protocol": "HTTP/1.1",
+    "stage": "dev",
+    "domainPrefix": "testapi",
+    "requestTimeEpoch": 1698796800000,
+    "requestId": "test-request-id-002",
+    "identity": {
+      "cognitoIdentityPoolId": null,
+      "accountId": null,
+      "cognitoIdentityId": null,
+      "caller": null,
+      "sourceIp": "192.168.1.1",
+      "principalOrgId": null,
+      "accessKey": null,
+      "cognitoAuthenticationType": null,
+      "cognitoAuthenticationProvider": null,
+      "userArn": null,
+      "userAgent": "Mobile-App/1.0",
+      "user": null
+    },
+    "domainName": "testapi.execute-api.us-east-1.amazonaws.com",
+    "apiId": "testapi123",
+    "authorizer": {
+      "user_sub": "test-user-123",
+      "attestation_verified": "true"
+    }
+  },
+  "body": null,
+  "isBase64Encoded": false
+}

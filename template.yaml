@@ -1,0 +1,271 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Companion code for AWS Compute Blog: "Verifying mobile app integrity at the
+  API layer using AWS serverless" (ComputeBlog-2603). Reference
+  implementation showing how to verify mobile app integrity using AWS serverless.
+  Play Integrity verification is simulated for demonstration purposes.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Deployment environment name
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  AttestationTokenTTLMinutes:
+    Type: Number
+    Default: 10
+    MinValue: 5
+    MaxValue: 15
+    Description: Time-to-live in minutes for minted attestation JWTs (5-15)
+
+  AppPackageName:
+    Type: String
+    Default: "com.example.app"
+    Description: Expected Android app package name for Play Integrity verification
+
+  CognitoCallbackUrl:
+    Type: String
+    Default: "http://localhost:3000/callback"
+    Description: OAuth callback URL for Cognito hosted UI
+
+  GooglePlayIntegrityProjectId:
+    Type: String
+    Default: "demo-project"
+    Description: Google Cloud project ID for Play Integrity verification
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 10
+    MemorySize: 256
+    Tracing: Active
+
+Resources:
+  # ===== API Gateway =====
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/apigateway/attestation-api-${Environment}"
+      RetentionInDays: 90
+
+  AttestationApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "attestation-api-${Environment}"
+      StageName: !Ref Environment
+      TracingEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}'
+      Auth:
+        DefaultAuthorizer: AttestationAuthorizer
+        Authorizers:
+          AttestationAuthorizer:
+            FunctionPayloadType: REQUEST
+            FunctionArn: !GetAtt AuthorizerFunction.Arn
+            Identity:
+              Headers:
+                - Authorization
+                - X-Attestation-Token
+              ReauthorizeEvery: 300
+
+  # ===== Cognito Resources =====
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "attestation-user-pool-${Environment}"
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: true
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "attestation-app-client-${Environment}"
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+      CallbackURLs:
+        - !Ref CognitoCallbackUrl
+
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "attestation-${Environment}-${AWS::AccountId}"
+      UserPoolId: !Ref CognitoUserPool
+
+  # ===== KMS Resources =====
+  AttestationSigningKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "KMS CMK for encrypting attestation signing secret (${Environment})"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowRootAccountFullAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+
+  AttestationSigningKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/attestation-signing-key-${Environment}"
+      TargetKeyId: !Ref AttestationSigningKey
+
+  # ===== Secrets Manager Resources =====
+  AttestationSigningSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "attestation-signing-secret-${Environment}"
+      Description: HMAC signing key for attestation JWT minting and verification
+      KmsKeyId: !Ref AttestationSigningKey
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludePunctuation: true
+        ExcludeCharacters: "!@#$%^&*()_+-=[]{}|;':\",./<>?`~"
+
+  # ===== Lambda Functions =====
+  AttestationExchangeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "attestation-exchange-${Environment}"
+      CodeUri: src/attestation_exchange/
+      Handler: app.lambda_handler
+      MemorySize: 256
+      Timeout: 10
+      Environment:
+        Variables:
+          SIGNING_SECRET_ARN: !Ref AttestationSigningSecret
+          TOKEN_TTL_MINUTES: !Ref AttestationTokenTTLMinutes
+          DEMO_MODE: "true"
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPool
+          COGNITO_APP_CLIENT_ID: !Ref CognitoUserPoolClient
+          COGNITO_REGION: !Ref AWS::Region
+          EXPECTED_PACKAGE_NAME: !Ref AppPackageName
+          GOOGLE_PROJECT_ID: !Ref GooglePlayIntegrityProjectId
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref AttestationSigningSecret
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !GetAtt AttestationSigningKey.Arn
+      Events:
+        PostAttest:
+          Type: Api
+          Properties:
+            Path: /attest
+            Method: POST
+            RestApiId: !Ref AttestationApi
+            Auth:
+              Authorizer: NONE
+
+  AuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "attestation-authorizer-${Environment}"
+      CodeUri: src/authorizer/
+      Handler: app.lambda_handler
+      MemorySize: 256
+      Timeout: 5
+      Environment:
+        Variables:
+          SIGNING_SECRET_ARN: !Ref AttestationSigningSecret
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPool
+          COGNITO_APP_CLIENT_ID: !Ref CognitoUserPoolClient
+          COGNITO_REGION: !Ref AWS::Region
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref AttestationSigningSecret
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: !GetAtt AttestationSigningKey.Arn
+
+  SampleApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "sample-api-${Environment}"
+      CodeUri: src/sample_api/
+      Handler: app.lambda_handler
+      MemorySize: 128
+      Timeout: 5
+      Events:
+        GetProtected:
+          Type: Api
+          Properties:
+            Path: /protected
+            Method: GET
+            RestApiId: !Ref AttestationApi
+
+  # ===== Lambda Permissions =====
+  AuthorizerFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt AuthorizerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AttestationApi}/*"
+
+Outputs:
+  ApiEndpoint:
+    Description: Base URL for the Attestation API Gateway endpoint
+    Value: !Sub "https://${AttestationApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+
+  AttestationEndpoint:
+    Description: Full URL for the attestation exchange endpoint
+    Value: !Sub "https://${AttestationApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/attest"
+
+  CognitoUserPoolId:
+    Description: ID of the Cognito User Pool for user authentication
+    Value: !Ref CognitoUserPool
+
+  CognitoAppClientId:
+    Description: ID of the Cognito User Pool App Client
+    Value: !Ref CognitoUserPoolClient
+
+  CognitoLoginUrl:
+    Description: Cognito hosted UI login URL for user authentication
+    Value: !Sub "https://attestation-${Environment}-${AWS::AccountId}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${CognitoUserPoolClient}&response_type=code&scope=openid+email+profile&redirect_uri=${CognitoCallbackUrl}"
